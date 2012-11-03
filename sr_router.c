@@ -75,7 +75,7 @@ void sr_handlepacket(struct sr_instance* sr,
   assert(sr);
   assert(packet);
   assert(interface);
-  printf("hello rory\n");
+  printf("hello world rory\n");
   print_hdrs(packet, len);
   printf("*** -> Received packet of length %d \n",len);
 
