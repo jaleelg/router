@@ -166,58 +166,58 @@ int main(int argc, char **argv)
     else
         strncpy(sr.template, template, 30);
 
-    // sr.topo_id = topo;
-    // strncpy(sr.host,host,32);
+    sr.topo_id = topo;
+    strncpy(sr.host,host,32);
 
-    // if(! user )
-    // { sr_set_user(&sr); }
-    // else
-    // { strncpy(sr.user, user, 32); }
+    if(! user )
+    { sr_set_user(&sr); }
+    else
+    { strncpy(sr.user, user, 32); }
 
-    // /* -- set up file pointer for logging of raw packets -- */
-    // if(logfile != 0)
-    // {
-    //     sr.logfile = sr_dump_open(logfile,0,PACKET_DUMP_SIZE);
-    //     if(!sr.logfile)
-    //     {
-    //         fprintf(stderr,"Error opening up dump file %s\n",
-    //                 logfile);
-    //         exit(1);
-    //     }
-    // }
+    /* -- set up file pointer for logging of raw packets -- */
+    if(logfile != 0)
+    {
+        sr.logfile = sr_dump_open(logfile,0,PACKET_DUMP_SIZE);
+        if(!sr.logfile)
+        {
+            fprintf(stderr,"Error opening up dump file %s\n",
+                    logfile);
+            exit(1);
+        }
+    }
 
     
 
-    // Debug("Client %s connecting to Server %s:%d\n", sr.user, server, port);
-    // if(template)
-    //     Debug("Requesting topology template %s\n", template);
-    // else
-    //     Debug("Requesting topology %d\n", topo);
+    Debug("Client %s connecting to Server %s:%d\n", sr.user, server, port);
+    if(template)
+        Debug("Requesting topology template %s\n", template);
+    else
+        Debug("Requesting topology %d\n", topo);
 
-    // /* connect to server and negotiate session */
-    // if(sr_connect_to_server(&sr,port,server) == -1)
-    // {
-    //     return 1;
-    // }
+    /* connect to server and negotiate session */
+    if(sr_connect_to_server(&sr,port,server) == -1)
+    {
+        return 1;
+    }
 
-    // if(template != NULL && strcmp(rtable, "rtable.vrhost") == 0) {  we've recv'd the rtable now, so read it in 
-    //     Debug("Connected to new instantiation of topology template %s\n", template);
-    //     sr_load_rt_wrap(&sr, "rtable.vrhost");
-    // }
-    // else {
-    //   /* Read from specified routing table */
-    //   sr_load_rt_wrap(&sr, rtable);
-    // }
+    if(template != NULL && strcmp(rtable, "rtable.vrhost") == 0) {  //we've recv'd the rtable now, so read it in 
+        Debug("Connected to new instantiation of topology template %s\n", template);
+        sr_load_rt_wrap(&sr, "rtable.vrhost");
+    }
+    else {
+      /* Read from specified routing table */
+      sr_load_rt_wrap(&sr, rtable);
+    }
 
-    // /* call router init (for arp subsystem etc.) */
+    /* call router init (for arp subsystem etc.) */
       sr_init(&sr);
 
-    // /* -- whizbang main loop ;-) */
-    // while( sr_read_from_server(&sr) == 1);
+    /* -- whizbang main loop ;-) */
+    while( sr_read_from_server(&sr) == 1);
 
-    // sr_destroy_instance(&sr);
+    sr_destroy_instance(&sr);
 
-     test_lpm(&sr);
+     //test_lpm(&sr);
      //test_arp_cache(&sr);
 
     return 0;

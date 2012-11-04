@@ -106,6 +106,15 @@ struct sr_arpcache {
     pthread_mutexattr_t attr;
 };
 
+/* Handles receving an ARP reply. Inserts IP-MAC mapping of reply into the ARP
+cache, then checks to see if any packets can now be sent as a result of this mapping, 
+and sends them */
+void sr_recv_reply(struct sr_instance *sr, struct sr_arp_hdr *reply);
+
+/* Checks a request to see if another ARP needs to be sent or whether we should
+   give up and send an ICMP host unreachable back to source */
+void sr_handle_arpreq(struct sr_arpcache *cache, struct sr_arpreq *req);
+
 /* Tries to find ip address in arp cache. If found, sends ethernet frame. If not found,
 adds packet to arp queue */
 void sr_attempt_send(struct sr_instance *sr, uint32_t ip_address, 
@@ -144,6 +153,9 @@ void sr_arpreq_destroy(struct sr_arpcache *cache, struct sr_arpreq *entry);
 
 /* Prints out the ARP table. */
 void sr_arpcache_dump(struct sr_arpcache *cache);
+
+/* prints out the ARP request queue */
+void sr_print_queue(struct sr_arpcache *cache);
 
 /* You shouldn't have to call these methods--they're already called in the
    starter code for you. The init call is a constructor, the destroy call is

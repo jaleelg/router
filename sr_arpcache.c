@@ -20,12 +20,31 @@ void sr_attempt_send(struct sr_instance *sr, uint32_t ip_address,
 
    if (entry){
         unsigned char *mac_address = entry->mac;
-       // send ethernet frame to this address
+        // Need to build ethernet header
+        sr_send_packet(sr, packet, packet_len, iface);
         free(entry);
    }else{
        struct sr_arpreq *req = sr_arpcache_queuereq(&(sr->cache), ip_address, packet, packet_len, iface);
-       //handle_arpreq(req);
+       sr_handle_arpreq(&(sr->cache), req);
    }
+}
+
+int diff_time(time_t a, time_t b){
+    return b-a;
+}
+
+void sr_handle_arpreq(struct sr_arpcache *cache, struct sr_arpreq *req){
+    time_t now = time(NULL);
+    if(diff_time(now, req->sent) > 1.0){
+        if(req->times_sent >= 5){
+            // Send an ICMP host unreachable to ALL packets waiting
+            sr_arpreq_destroy(cache, req);
+        }else{
+            //send ARP
+            req->sent = now;
+            req->times_sent++;
+        }
+    }
 }
 
 /* 
@@ -34,7 +53,24 @@ void sr_attempt_send(struct sr_instance *sr, uint32_t ip_address,
   See the comments in the header file for an idea of what it should look like.
 */
 void sr_arpcache_sweepreqs(struct sr_instance *sr) { 
-    /* Fill this in */
+    struct sr_arpreq *req = sr->cache.requests;
+    while(req){
+        sr_handle_arpreq(&(sr->cache), req);
+        req = req->next;
+    }
+}
+
+void sr_recv_reply(struct sr_instance *sr, struct sr_arp_hdr *reply){
+    struct sr_arpreq *req = sr_arpcache_insert(&(sr->cache), reply->ar_sha, reply->ar_sip);
+    if(req){
+        struct sr_packet *packet = req->packets;
+        while(packet){
+            sr_send_packet(sr, packet->buf, packet->len, packet->iface);
+            packet = packet->next;
+        }
+        sr_arpreq_destroy(&(sr->cache), req);
+    }
+
 }
 
 /* You should not need to touch the rest of this code. */
@@ -211,6 +247,21 @@ void sr_arpcache_dump(struct sr_arpcache *cache) {
     }
     
     fprintf(stderr, "\n");
+}
+
+void sr_print_queue(struct sr_arpcache *cache){
+    fprintf(stderr, "------------------printing ARP Queue------------------\n");
+    struct sr_arpreq *request = cache->requests;
+    while(request){
+        fprintf(stderr, "ip: %u \t time sent: %d \t num times sent: %u \n",request->ip, request->sent, request->times_sent);
+        struct sr_packet *packet = request->packets;
+        while(packet){
+            fprintf(stderr, "len: %u \t outgoing interface: %s\n", packet->len, packet->iface);
+            packet = packet->next;
+        }
+        fprintf(stderr, "\n");
+        request = request->next;
+    }
 }
 
 /* Initialize table + table lock. Returns 0 on success. */

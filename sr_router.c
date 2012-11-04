@@ -106,7 +106,8 @@ void sr_handlepacket(struct sr_instance* sr,
 
     sr_attempt_send(sr, ip_dst, packet, len, interface);
 
-    sr_arpcache_dump(&(sr->cache));
+    //sr_arpcache_dump(&(sr->cache));
+    sr_print_queue(&(sr->cache));
 
   }
   
