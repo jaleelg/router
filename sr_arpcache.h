@@ -106,6 +106,13 @@ struct sr_arpcache {
     pthread_mutexattr_t attr;
 };
 
+/* Tries to find ip address in arp cache. If found, sends ethernet frame. If not found,
+adds packet to arp queue */
+void sr_attempt_send(struct sr_instance *sr, uint32_t ip_address, 
+                                        uint8_t *packet,           
+                                       unsigned int packet_len,
+                                       char *iface);
+
 /* Checks if an IP->MAC mapping is in the cache. IP is in network byte order. 
    You must free the returned structure if it is not NULL. */
 struct sr_arpentry *sr_arpcache_lookup(struct sr_arpcache *cache, uint32_t ip);

@@ -75,9 +75,41 @@ void sr_handlepacket(struct sr_instance* sr,
   assert(sr);
   assert(packet);
   assert(interface);
-  printf("hello world test rory\n");
-  print_hdrs(packet, len);
+  
   printf("*** -> Received packet of length %d \n",len);
+  print_hdrs(packet, len);
+  int min_length  = sizeof(sr_ethernet_hdr_t);
+  if(len < min_length){
+    fprintf(stderr,"Packet too small - returning...\n");
+    return;
+  }
+
+  uint16_t ethtype = ethertype(packet);
+
+  if(ethtype == ethertype_ip){
+    fprintf(stderr, "We have an IP packet\n");
+    min_length += sizeof(sr_ip_hdr_t);
+    if (len < min_length) {
+      fprintf(stderr, "Failed to print IP header, insufficient length\n");
+      return;
+    }
+
+    sr_ip_hdr_t *iphdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
+    uint32_t ip_dst = iphdr->ip_dst;
+    fprintf(stderr, "destination IP is: %u\n", ip_dst);
+    struct in_addr address;
+    address.s_addr = ip_dst;
+
+    char interface[sr_IFACE_NAMELEN];
+    bool found = longest_prefix_match(sr, address, interface);
+    fprintf(stderr, "Outgoing Interface is: %s\n", interface);
+
+    sr_attempt_send(sr, ip_dst, packet, len, interface);
+
+    sr_arpcache_dump(&(sr->cache));
+
+  }
+  
 
   /* fill in code here */
 

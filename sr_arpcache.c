@@ -11,6 +11,23 @@
 #include "sr_if.h"
 #include "sr_protocol.h"
 
+void sr_attempt_send(struct sr_instance *sr, uint32_t ip_address, 
+                                        uint8_t *packet,           
+                                       unsigned int packet_len,
+                                       char *iface){
+    //need to free entry!!
+   struct sr_arpentry *entry = sr_arpcache_lookup(&(sr->cache), ip_address);
+
+   if (entry){
+        unsigned char *mac_address = entry->mac;
+       // send ethernet frame to this address
+        free(entry);
+   }else{
+       struct sr_arpreq *req = sr_arpcache_queuereq(&(sr->cache), ip_address, packet, packet_len, iface);
+       //handle_arpreq(req);
+   }
+}
+
 /* 
   This function gets called every second. For each request sent out, we keep
   checking whether we should resend an request or destroy the arp request.
@@ -26,12 +43,13 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
    You must free the returned structure if it is not NULL. */
 struct sr_arpentry *sr_arpcache_lookup(struct sr_arpcache *cache, uint32_t ip) {
     pthread_mutex_lock(&(cache->lock));
-    
     struct sr_arpentry *entry = NULL, *copy = NULL;
     
     int i;
     for (i = 0; i < SR_ARPCACHE_SZ; i++) {
+        printf("ip is: %u\n", cache->entries[i].ip);
         if ((cache->entries[i].valid) && (cache->entries[i].ip == ip)) {
+
             entry = &(cache->entries[i]);
         }
     }

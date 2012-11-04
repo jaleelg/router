@@ -17,6 +17,7 @@
 #define __EXTENSIONS__
 #endif /* _SOLARIS_ */
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -54,6 +55,56 @@ static void sr_load_rt_wrap(struct sr_instance* sr, char* rtable);
 /*-----------------------------------------------------------------------------
  *---------------------------------------------------------------------------*/
 
+void test_match(struct sr_instance *sr,int a, int b, int c, int d, bool result, char * correct_match){
+    in_addr_t x;
+
+    char *y = (char *)&x; /* so that we can address the individual bytes */
+
+    y[0] = a;
+    y[1] = b;
+    y[2] = c;
+    y[3] = d;
+
+    struct in_addr ip = *(struct in_addr *)&x;
+
+    char interface[sr_IFACE_NAMELEN];
+    bool found = longest_prefix_match(sr, ip, interface);
+    assert(found == result && strcmp(interface, correct_match) == 0);
+}
+
+void test_lpm(struct sr_instance *sr){
+    sr_print_routing_table(sr);
+
+    test_match(sr, 107, 23, 53, 142, true, "eth1");
+    test_match(sr, 107, 23, 77, 72, true, "eth2");
+    test_match(sr, 192, 32, 11, 12, true, "eth3");
+    test_match(sr, 122, 12, 15, 16, true, "eth3");
+    test_match(sr, 112, 8, 0, 0, true, "eth3");
+    test_match(sr, 107, 23, 77, 71, true, "eth3");
+    test_match(sr, 0, 0, 0, 0, true, "eth3");
+
+    printf("-------------------All LPM tests passed----------------------\n");
+
+}
+
+void test_arp_cache(struct sr_instance *sr){
+    in_addr_t x;
+
+    char *y = (char *)&x; /* so that we can address the individual bytes */
+
+    y[0] = 107;
+    y[1] = 23;
+    y[2] = 53;
+    y[3] = 142;
+
+    struct in_addr ip = *(struct in_addr *)&x;
+
+    char interface[sr_IFACE_NAMELEN];
+    bool found = longest_prefix_match(sr, ip, interface);
+    struct sr_arpentry *entry = sr_arpcache_lookup(&(sr->cache), ip.s_addr);
+}
+
+
 int main(int argc, char **argv)
 {
     int c;
@@ -65,7 +116,7 @@ int main(int argc, char **argv)
     unsigned int port = DEFAULT_PORT;
     unsigned int topo = DEFAULT_TOPO;
     char *logfile = 0;
-    struct sr_instance sr;
+     struct sr_instance sr;
 
     printf("Using %s\n", VERSION_INFO);
 
@@ -104,8 +155,8 @@ int main(int argc, char **argv)
         } /* switch */
     } /* -- while -- */
 
-    /* -- zero out sr instance -- */
-    sr_init_instance(&sr);
+    // /* -- zero out sr instance -- */
+     sr_init_instance(&sr);
 
     /* -- set up routing table from file -- */
     if(template == NULL) {
@@ -115,54 +166,59 @@ int main(int argc, char **argv)
     else
         strncpy(sr.template, template, 30);
 
-    sr.topo_id = topo;
-    strncpy(sr.host,host,32);
+    // sr.topo_id = topo;
+    // strncpy(sr.host,host,32);
 
-    if(! user )
-    { sr_set_user(&sr); }
-    else
-    { strncpy(sr.user, user, 32); }
+    // if(! user )
+    // { sr_set_user(&sr); }
+    // else
+    // { strncpy(sr.user, user, 32); }
 
-    /* -- set up file pointer for logging of raw packets -- */
-    if(logfile != 0)
-    {
-        sr.logfile = sr_dump_open(logfile,0,PACKET_DUMP_SIZE);
-        if(!sr.logfile)
-        {
-            fprintf(stderr,"Error opening up dump file %s\n",
-                    logfile);
-            exit(1);
-        }
-    }
+    // /* -- set up file pointer for logging of raw packets -- */
+    // if(logfile != 0)
+    // {
+    //     sr.logfile = sr_dump_open(logfile,0,PACKET_DUMP_SIZE);
+    //     if(!sr.logfile)
+    //     {
+    //         fprintf(stderr,"Error opening up dump file %s\n",
+    //                 logfile);
+    //         exit(1);
+    //     }
+    // }
 
-    Debug("Client %s connecting to Server %s:%d\n", sr.user, server, port);
-    if(template)
-        Debug("Requesting topology template %s\n", template);
-    else
-        Debug("Requesting topology %d\n", topo);
+    
 
-    /* connect to server and negotiate session */
-    if(sr_connect_to_server(&sr,port,server) == -1)
-    {
-        return 1;
-    }
+    // Debug("Client %s connecting to Server %s:%d\n", sr.user, server, port);
+    // if(template)
+    //     Debug("Requesting topology template %s\n", template);
+    // else
+    //     Debug("Requesting topology %d\n", topo);
 
-    if(template != NULL && strcmp(rtable, "rtable.vrhost") == 0) { /* we've recv'd the rtable now, so read it in */
-        Debug("Connected to new instantiation of topology template %s\n", template);
-        sr_load_rt_wrap(&sr, "rtable.vrhost");
-    }
-    else {
-      /* Read from specified routing table */
-      sr_load_rt_wrap(&sr, rtable);
-    }
+    // /* connect to server and negotiate session */
+    // if(sr_connect_to_server(&sr,port,server) == -1)
+    // {
+    //     return 1;
+    // }
 
-    /* call router init (for arp subsystem etc.) */
-    sr_init(&sr);
+    // if(template != NULL && strcmp(rtable, "rtable.vrhost") == 0) {  we've recv'd the rtable now, so read it in 
+    //     Debug("Connected to new instantiation of topology template %s\n", template);
+    //     sr_load_rt_wrap(&sr, "rtable.vrhost");
+    // }
+    // else {
+    //   /* Read from specified routing table */
+    //   sr_load_rt_wrap(&sr, rtable);
+    // }
 
-    /* -- whizbang main loop ;-) */
-    while( sr_read_from_server(&sr) == 1);
+    // /* call router init (for arp subsystem etc.) */
+      sr_init(&sr);
 
-    sr_destroy_instance(&sr);
+    // /* -- whizbang main loop ;-) */
+    // while( sr_read_from_server(&sr) == 1);
+
+    // sr_destroy_instance(&sr);
+
+     test_lpm(&sr);
+     //test_arp_cache(&sr);
 
     return 0;
 }/* -- main -- */
