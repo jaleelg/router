@@ -106,14 +106,14 @@ struct sr_arpcache {
     pthread_mutexattr_t attr;
 };
 
-/* Handles receving an ARP reply. Inserts IP-MAC mapping of reply into the ARP
+/* Handles receving an ARP . Inserts IP-MAC mapping of reply into the ARP
 cache, then checks to see if any packets can now be sent as a result of this mapping, 
 and sends them */
-void sr_recv_reply(struct sr_instance *sr, struct sr_arp_hdr *reply);
+void sr_recv_arp(struct sr_instance *sr, struct sr_arp_hdr *reply);
 
 /* Checks a request to see if another ARP needs to be sent or whether we should
    give up and send an ICMP host unreachable back to source */
-void sr_handle_arpreq(struct sr_arpcache *cache, struct sr_arpreq *req);
+void sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req);
 
 /* Tries to find ip address in arp cache. If found, sends ethernet frame. If not found,
 adds packet to arp queue */

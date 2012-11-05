@@ -13,7 +13,8 @@
 
 #include <stdio.h>
 #include <assert.h>
-
+#include <stdlib.h>
+ #include <string.h>
 
 #include "sr_if.h"
 #include "sr_rt.h"
@@ -50,6 +51,51 @@ void sr_init(struct sr_instance* sr)
 
 } /* -- sr_init -- */
 
+char * sr_get_iface_from_ip(struct sr_instance *sr, uint32_t ip){
+    struct sr_rt* curr = sr->routing_table;
+    while(curr){
+        if(curr->gw.s_addr == ip)return curr->interface;
+        curr = curr->next;
+    }
+    return NULL;
+}
+
+
+void sr_send_eth(struct sr_instance *sr, uint8_t *buf, unsigned int len, uint8_t *destination,
+              char *iface, enum sr_ethertype type){
+
+  unsigned int total_size = len + sizeof(sr_ethernet_hdr_t);
+  uint8_t *eth = malloc(total_size);
+  memcpy(eth + sizeof(sr_ethernet_hdr_t), buf, len);
+
+  sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t *)eth;
+  
+  unsigned char addr[ETHER_ADDR_LEN];
+  sr_iface_to_mac(sr, iface, addr);
+
+  memcpy(eth_hdr->ether_dhost, destination, ETHER_ADDR_LEN);
+  memcpy(eth_hdr->ether_shost, addr, ETHER_ADDR_LEN);
+  eth_hdr->ether_type = type;
+  print_hdr_eth(eth);
+  sr_send_packet(sr, eth, total_size, iface);
+  free(eth);
+}
+
+
+
+
+int sr_iface_to_mac(struct sr_instance *sr, char *interface, unsigned char *mac_addr){
+  struct sr_if *node = sr->if_list;
+  while(node){
+    if(strcmp(node->name, interface) == 0){
+        memcpy(mac_addr, node->addr, ETHER_ADDR_LEN);
+        return 1;
+    }
+    node = node->next;
+  }
+  return 0;
+}
+
 /*---------------------------------------------------------------------
  * Method: sr_handlepacket(uint8_t* p,char* interface)
  * Scope:  Global
@@ -80,9 +126,18 @@ void sr_handlepacket(struct sr_instance* sr,
   print_hdrs(packet, len);
   int min_length  = sizeof(sr_ethernet_hdr_t);
   if(len < min_length){
-    fprintf(stderr,"Packet too small - returning...\n");
+    fprintf(stderr,"Ethernet Packet too small - returning...\n");
+    free(packet);
     return;
   }
+
+  uint8_t *temp = malloc(len);
+  if(temp){
+    memcpy(temp, packet, len);
+    packet = temp;
+  }
+
+  sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t *)packet;
 
   uint16_t ethtype = ethertype(packet);
 
@@ -90,7 +145,8 @@ void sr_handlepacket(struct sr_instance* sr,
     fprintf(stderr, "We have an IP packet\n");
     min_length += sizeof(sr_ip_hdr_t);
     if (len < min_length) {
-      fprintf(stderr, "Failed to print IP header, insufficient length\n");
+      fprintf(stderr, "IP Packet too small - returning...\n");
+      free(packet);
       return;
     }
 
@@ -100,17 +156,26 @@ void sr_handlepacket(struct sr_instance* sr,
     struct in_addr address;
     address.s_addr = ip_dst;
 
-    char interface[sr_IFACE_NAMELEN];
-    bool found = longest_prefix_match(sr, address, interface);
-    fprintf(stderr, "Outgoing Interface is: %s\n", interface);
+    char outgoing_iface[sr_IFACE_NAMELEN];
+    bool found = longest_prefix_match(sr, address, outgoing_iface);
+    if(found){
+      fprintf(stderr, "Outgoing Interface is: %s\n", outgoing_iface);
 
-    sr_attempt_send(sr, ip_dst, packet, len, interface);
+
+      //char mac_addr [ETHER_ADDR_LEN];
+      struct sr_if * node = sr_get_interface(sr, outgoing_iface);
+
+      memcpy(eth_hdr->ether_shost, node->addr, ETHER_ADDR_LEN);
+
+      sr_attempt_send(sr, ip_dst, packet, len, outgoing_iface);
+    }else{
+      fprintf(stderr, "No routing table match, send ICMP\n");
+    }
 
     //sr_arpcache_dump(&(sr->cache));
     sr_print_queue(&(sr->cache));
 
   }
-  
 
   /* fill in code here */
 

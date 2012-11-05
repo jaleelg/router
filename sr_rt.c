@@ -47,7 +47,7 @@
             printf("current mask is: %s\n", inet_ntoa(curr->mask));
             printf("best mask is: %s\n", inet_ntoa(largest_mask));
 
-            if(curr->mask.s_addr >= largest_mask.s_addr){
+            if(ntohl(curr->mask.s_addr) >= ntohl(largest_mask.s_addr) ){
                 printf("it is a new longest match!\n");
                 largest_mask = curr->mask;
                 correct_iface = curr->interface;
@@ -60,6 +60,8 @@
     strcpy(interface, correct_iface);
     return found;
  }
+
+
 
 /*---------------------------------------------------------------------
  * Method:

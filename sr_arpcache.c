@@ -11,21 +11,68 @@
 #include "sr_if.h"
 #include "sr_protocol.h"
 
-void sr_attempt_send(struct sr_instance *sr, uint32_t ip_address, 
-                                        uint8_t *packet,           
-                                       unsigned int packet_len,
+#include "sr_utils.h"
+
+void sr_send_arp(struct sr_instance *sr, enum sr_arp_opcode code, char *iface, char *target_eth_addr, uint32_t target_ip){
+    
+    sr_arp_hdr_t *arp_hdr = malloc(sizeof(sr_arp_hdr_t));
+    if(arp_hdr){
+        arp_hdr->ar_hrd = arp_hrd_ethernet;
+        arp_hdr->ar_pro = ethertype_ip;
+        arp_hdr->ar_hln = ETHER_ADDR_LEN;
+        arp_hdr->ar_pln = 4;
+        arp_hdr->ar_op = code;
+
+        struct sr_if *node = sr_get_interface(sr, iface);
+
+        memcpy(arp_hdr->ar_sha, node->addr, ETHER_ADDR_LEN);
+
+        memcpy(arp_hdr->ar_tha, target_eth_addr, ETHER_ADDR_LEN);
+        arp_hdr->ar_tip = target_ip;
+        print_hdr_arp((uint8_t *)arp_hdr);
+
+        sr_send_eth(sr, (uint8_t *)arp_hdr, sizeof(sr_arp_hdr_t), (uint8_t *)target_eth_addr, iface, ethertype_arp);
+
+        free(arp_hdr);
+    }
+    
+}
+
+void sr_send_arp_req(struct sr_instance *sr, uint32_t target_ip){
+    char * iface = sr_get_iface_from_ip(sr, target_ip);
+    if(iface){
+        sr_send_arp(sr, arp_op_request, iface, "", target_ip); // not empty string?    
+    }
+    
+}
+
+void sr_send_arp_reply(struct sr_instance *sr, char *iface, char * target_eth_addr, uint32_t target_ip){
+    sr_send_arp(sr, arp_op_reply, iface, target_eth_addr, target_ip);
+}
+
+/* Tries to find ip address in arp cache. If found, sends ethernet frame. If not found,
+adds packet to arp queue */
+void sr_attempt_send(struct sr_instance *sr, uint32_t ip_dest, 
+                                        uint8_t *frame,           
+                                       unsigned int frame_len,
                                        char *iface){
     //need to free entry!!
-   struct sr_arpentry *entry = sr_arpcache_lookup(&(sr->cache), ip_address);
+   struct sr_arpentry *entry = sr_arpcache_lookup(&(sr->cache), ip_dest);
 
    if (entry){
+        fprintf(stderr, "Found entry for %d in cache\n", ip_dest);
         unsigned char *mac_address = entry->mac;
+        memcpy( ((sr_ethernet_hdr_t *)frame)->ether_dhost, mac_address, ETHER_ADDR_LEN);
+        //free packet??
+        int result = sr_send_packet(sr, frame, frame_len, iface);
+        if(result == 0)free(frame);
         // Need to build ethernet header
-        sr_send_packet(sr, packet, packet_len, iface);
+
         free(entry);
    }else{
-       struct sr_arpreq *req = sr_arpcache_queuereq(&(sr->cache), ip_address, packet, packet_len, iface);
-       sr_handle_arpreq(&(sr->cache), req);
+        fprintf(stderr, "Couldn't find entry for %d in cache....queueing entry\n", ip_dest);
+       struct sr_arpreq *req = sr_arpcache_queuereq(&(sr->cache), ip_dest, frame, frame_len, iface);
+       sr_handle_arpreq(sr, req);
    }
 }
 
@@ -33,7 +80,8 @@ int diff_time(time_t a, time_t b){
     return b-a;
 }
 
-void sr_handle_arpreq(struct sr_arpcache *cache, struct sr_arpreq *req){
+void sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req){
+    struct sr_arpcache *cache = &(sr->cache);
     time_t now = time(NULL);
     if(diff_time(now, req->sent) > 1.0){
         if(req->times_sent >= 5){
@@ -41,6 +89,7 @@ void sr_handle_arpreq(struct sr_arpcache *cache, struct sr_arpreq *req){
             sr_arpreq_destroy(cache, req);
         }else{
             //send ARP
+            sr_send_arp_req(sr, req->ip);
             req->sent = now;
             req->times_sent++;
         }
@@ -55,13 +104,13 @@ void sr_handle_arpreq(struct sr_arpcache *cache, struct sr_arpreq *req){
 void sr_arpcache_sweepreqs(struct sr_instance *sr) { 
     struct sr_arpreq *req = sr->cache.requests;
     while(req){
-        sr_handle_arpreq(&(sr->cache), req);
+        sr_handle_arpreq(sr, req);
         req = req->next;
     }
 }
 
-void sr_recv_reply(struct sr_instance *sr, struct sr_arp_hdr *reply){
-    struct sr_arpreq *req = sr_arpcache_insert(&(sr->cache), reply->ar_sha, reply->ar_sip);
+void sr_recv_arp(struct sr_instance *sr, struct sr_arp_hdr *arp){
+    struct sr_arpreq *req = sr_arpcache_insert(&(sr->cache), arp->ar_sha, arp->ar_sip);
     if(req){
         struct sr_packet *packet = req->packets;
         while(packet){
