@@ -17,16 +17,16 @@ void sr_send_arp(struct sr_instance *sr, enum sr_arp_opcode code, char *iface, c
     
     sr_arp_hdr_t *arp_hdr = malloc(sizeof(sr_arp_hdr_t));
     if(arp_hdr){
-        arp_hdr->ar_hrd = arp_hrd_ethernet;
-        arp_hdr->ar_pro = ethertype_ip;
+        arp_hdr->ar_hrd = htons(arp_hrd_ethernet);
+        arp_hdr->ar_pro = htons(ethertype_ip);
         arp_hdr->ar_hln = ETHER_ADDR_LEN;
         arp_hdr->ar_pln = 4;
-        arp_hdr->ar_op = code;
+        arp_hdr->ar_op = htons(code);
 
         struct sr_if *node = sr_get_interface(sr, iface);
 
         memcpy(arp_hdr->ar_sha, node->addr, ETHER_ADDR_LEN);
-
+        arp_hdr->ar_sip = node->ip;
         memcpy(arp_hdr->ar_tha, target_eth_addr, ETHER_ADDR_LEN);
         arp_hdr->ar_tip = target_ip;
         print_hdr_arp((uint8_t *)arp_hdr);
@@ -41,7 +41,12 @@ void sr_send_arp(struct sr_instance *sr, enum sr_arp_opcode code, char *iface, c
 void sr_send_arp_req(struct sr_instance *sr, uint32_t target_ip){
     char * iface = sr_get_iface_from_ip(sr, target_ip);
     if(iface){
-        sr_send_arp(sr, arp_op_request, iface, "", target_ip); // not empty string?    
+        uint8_t target[ETHER_ADDR_LEN];
+        int i;
+        for(i = 0; i < ETHER_ADDR_LEN; i++){
+            target[i] = 255;
+        }
+        sr_send_arp(sr, arp_op_request, iface, (char*)target, target_ip); // not empty string?    
     }
     
 }
@@ -77,18 +82,24 @@ void sr_attempt_send(struct sr_instance *sr, uint32_t ip_dest,
 }
 
 int diff_time(time_t a, time_t b){
-    return b-a;
+    //fprintf(stderr, "time a: %d\n", a);
+    //fprintf(stderr, "time b: %d\n", b);
+    return a-b;
 }
 
 void sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req){
     struct sr_arpcache *cache = &(sr->cache);
     time_t now = time(NULL);
+    
     if(diff_time(now, req->sent) > 1.0){
+        fprintf(stderr, "handling arp req for ip: %d\t", req->ip);
         if(req->times_sent >= 5){
+            fprintf(stderr, "Sent 5 times, destroying..... \n");
             // Send an ICMP host unreachable to ALL packets waiting
             sr_arpreq_destroy(cache, req);
         }else{
             //send ARP
+            fprintf(stderr, "Sending ARP req again..... \n");
             sr_send_arp_req(sr, req->ip);
             req->sent = now;
             req->times_sent++;
@@ -132,7 +143,7 @@ struct sr_arpentry *sr_arpcache_lookup(struct sr_arpcache *cache, uint32_t ip) {
     
     int i;
     for (i = 0; i < SR_ARPCACHE_SZ; i++) {
-        printf("ip is: %u\n", cache->entries[i].ip);
+        //printf("ip is: %u\n", cache->entries[i].ip);
         if ((cache->entries[i].valid) && (cache->entries[i].ip == ip)) {
 
             entry = &(cache->entries[i]);

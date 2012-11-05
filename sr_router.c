@@ -75,7 +75,7 @@ void sr_send_eth(struct sr_instance *sr, uint8_t *buf, unsigned int len, uint8_t
 
   memcpy(eth_hdr->ether_dhost, destination, ETHER_ADDR_LEN);
   memcpy(eth_hdr->ether_shost, addr, ETHER_ADDR_LEN);
-  eth_hdr->ether_type = type;
+  eth_hdr->ether_type = htons(type);
   print_hdr_eth(eth);
   sr_send_packet(sr, eth, total_size, iface);
   free(eth);
