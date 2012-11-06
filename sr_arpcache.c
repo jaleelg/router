@@ -123,9 +123,12 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 void sr_recv_arp(struct sr_instance *sr, struct sr_arp_hdr *arp){
     struct sr_arpreq *req = sr_arpcache_insert(&(sr->cache), arp->ar_sha, arp->ar_sip);
     if(req){
+        fprintf(stderr, "Requests waiting to go to %d....sending them \n", arp->ar_sip);
         struct sr_packet *packet = req->packets;
         while(packet){
+            print_hdrs(packet->buf, packet->len);
             sr_send_packet(sr, packet->buf, packet->len, packet->iface);
+
             packet = packet->next;
         }
         sr_arpreq_destroy(&(sr->cache), req);

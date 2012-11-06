@@ -70,8 +70,8 @@ void sr_send_eth(struct sr_instance *sr, uint8_t *buf, unsigned int len, uint8_t
 
   sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t *)eth;
   
-  unsigned char addr[ETHER_ADDR_LEN];
-  sr_iface_to_mac(sr, iface, addr);
+
+  unsigned char * addr = sr_iface_to_mac(sr, iface);
 
   memcpy(eth_hdr->ether_dhost, destination, ETHER_ADDR_LEN);
   memcpy(eth_hdr->ether_shost, addr, ETHER_ADDR_LEN);
@@ -84,16 +84,78 @@ void sr_send_eth(struct sr_instance *sr, uint8_t *buf, unsigned int len, uint8_t
 
 
 
-int sr_iface_to_mac(struct sr_instance *sr, char *interface, unsigned char *mac_addr){
+unsigned char * sr_iface_to_mac(struct sr_instance *sr, char *interface){
   struct sr_if *node = sr->if_list;
   while(node){
     if(strcmp(node->name, interface) == 0){
-        memcpy(mac_addr, node->addr, ETHER_ADDR_LEN);
-        return 1;
+        return node->addr;
     }
     node = node->next;
   }
-  return 0;
+  return NULL;
+}
+
+void sr_handle_arp_packet(struct sr_instance* sr, struct sr_arp_hdr * arp_packet, unsigned int len, char* interface){
+  int min_length = sizeof(sr_arp_hdr_t);
+  if (len < min_length) {
+    fprintf(stderr, "ARP Packet too small - returning...\n");
+    return;
+  }
+
+  if(strcmp(interface, sr_get_iface_from_ip(sr, arp_packet->ar_tip)) == 0){
+    fprintf(stderr, "ARP is for me at %s\n", interface);
+    sr_recv_arp(sr, arp_packet);
+
+    if(arp_packet->ar_op == arp_op_request){
+      fprintf(stderr, "It's an ARP request....lets send a reply\n");
+    }else{
+      fprintf(stderr, "It's a ARP reply so we're done!\n");
+    }
+
+  }else{
+    fprintf(stderr, "ARP NOT for me\n");
+  }
+
+
+
+}
+
+void sr_handle_ip_packet(struct sr_instance* sr, uint8_t * packet, unsigned int len, char* interface){
+
+    int min_length = sizeof(sr_ip_hdr_t) + sizeof(sr_ethernet_hdr_t);
+    if (len < min_length) {
+      fprintf(stderr, "IP Packet too small - returning...\n");
+      return;
+    }
+    
+    sr_ip_hdr_t *iphdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
+    uint32_t ip_dst = iphdr->ip_dst;
+    fprintf(stderr, "destination IP is: %u\n", ip_dst);
+    struct in_addr address;
+    address.s_addr = ip_dst;
+
+    char outgoing_iface[sr_IFACE_NAMELEN];
+    bool found = longest_prefix_match(sr, address, outgoing_iface);
+    if(found){
+      fprintf(stderr, "Outgoing Interface is: %s\n", outgoing_iface);
+
+      uint8_t *temp = malloc(len);
+      if(!temp)return;
+      
+      memcpy(temp, packet, len);
+
+      sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t *)temp;
+      
+      struct sr_if * node = sr_get_interface(sr, outgoing_iface);
+      memcpy(eth_hdr->ether_shost, node->addr, ETHER_ADDR_LEN);
+
+      sr_attempt_send(sr, ip_dst, temp, len, outgoing_iface);
+    }else{
+      fprintf(stderr, "No routing table match, send ICMP\n");
+    }
+
+    //sr_arpcache_dump(&(sr->cache));
+    sr_print_queue(&(sr->cache));
 }
 
 /*---------------------------------------------------------------------
@@ -127,54 +189,23 @@ void sr_handlepacket(struct sr_instance* sr,
   int min_length  = sizeof(sr_ethernet_hdr_t);
   if(len < min_length){
     fprintf(stderr,"Ethernet Packet too small - returning...\n");
-    free(packet);
     return;
   }
 
-  uint8_t *temp = malloc(len);
-  if(temp){
-    memcpy(temp, packet, len);
-    packet = temp;
-  }
-
-  sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t *)packet;
+  // uint8_t *temp = malloc(len);
+  // if(temp){
+  //   memcpy(temp, packet, len);
+  //   packet = temp;
+  // }
 
   uint16_t ethtype = ethertype(packet);
 
   if(ethtype == ethertype_ip){
     fprintf(stderr, "We have an IP packet\n");
-    min_length += sizeof(sr_ip_hdr_t);
-    if (len < min_length) {
-      fprintf(stderr, "IP Packet too small - returning...\n");
-      free(packet);
-      return;
-    }
-
-    sr_ip_hdr_t *iphdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
-    uint32_t ip_dst = iphdr->ip_dst;
-    fprintf(stderr, "destination IP is: %u\n", ip_dst);
-    struct in_addr address;
-    address.s_addr = ip_dst;
-
-    char outgoing_iface[sr_IFACE_NAMELEN];
-    bool found = longest_prefix_match(sr, address, outgoing_iface);
-    if(found){
-      fprintf(stderr, "Outgoing Interface is: %s\n", outgoing_iface);
-
-
-      //char mac_addr [ETHER_ADDR_LEN];
-      struct sr_if * node = sr_get_interface(sr, outgoing_iface);
-
-      memcpy(eth_hdr->ether_shost, node->addr, ETHER_ADDR_LEN);
-
-      sr_attempt_send(sr, ip_dst, packet, len, outgoing_iface);
-    }else{
-      fprintf(stderr, "No routing table match, send ICMP\n");
-    }
-
-    //sr_arpcache_dump(&(sr->cache));
-    sr_print_queue(&(sr->cache));
-
+    sr_handle_ip_packet(sr, packet, len, interface);
+  }else if(ethtype == ethertype_arp){
+    fprintf(stderr, "We have an ARP packet\n");
+    sr_handle_arp_packet(sr, (sr_arp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t)), len, interface);
   }
 
   /* fill in code here */
