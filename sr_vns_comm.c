@@ -44,6 +44,8 @@
 #include "sha1.h"
 #include "vnscommand.h"
 
+ #include "sr_utils.h"
+
 static void sr_log_packet(struct sr_instance* , uint8_t* , int );
 static int  sr_arp_req_not_for_us(struct sr_instance* sr,
                                   uint8_t * packet /* lent */,
@@ -577,7 +579,8 @@ int sr_send_packet(struct sr_instance* sr /* borrowed */,
         fprintf(stderr , "** Error: packet is wayy to short \n");
         return -1;
     }
-
+    fprintf(stderr, "-------------------Printing ethernet frame before we send.....-----------\n");
+    print_hdrs(buf, (uint32_t)len);
     /* Create packet */
     sr_pkt = (c_packet_header *)malloc(len +
             sizeof(c_packet_header));

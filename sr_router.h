@@ -56,7 +56,7 @@ struct sr_instance
     FILE* logfile;
 };
 
-char * sr_get_iface_from_ip(struct sr_instance *sr, uint32_t ip);
+char * sr_get_iface_from_gw_ip(struct sr_instance *sr, uint32_t ip);
 
 void sr_send_eth(struct sr_instance *sr, uint8_t *buf, unsigned int len, uint8_t *destination,
               char *iface, enum sr_ethertype type);

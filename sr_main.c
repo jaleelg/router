@@ -67,9 +67,9 @@ void test_match(struct sr_instance *sr,int a, int b, int c, int d, bool result, 
 
     struct in_addr ip = *(struct in_addr *)&x;
 
-    char interface[sr_IFACE_NAMELEN];
-    bool found = longest_prefix_match(sr, ip, interface);
-    assert(found == result && strcmp(interface, correct_match) == 0);
+
+    struct sr_rt * match = longest_prefix_match(sr, (uint32_t)ip.s_addr);
+    assert(match && strcmp(match->interface, correct_match) == 0);
 }
 
 void test_lpm(struct sr_instance *sr){
@@ -99,8 +99,8 @@ void test_arp_cache(struct sr_instance *sr){
 
     struct in_addr ip = *(struct in_addr *)&x;
 
-    char interface[sr_IFACE_NAMELEN];
-    bool found = longest_prefix_match(sr, ip, interface);
+    //char interface[sr_IFACE_NAMELEN];
+    //bool found = longest_prefix_match(sr, ip, interface);
     struct sr_arpentry *entry = sr_arpcache_lookup(&(sr->cache), ip.s_addr);
 }
 

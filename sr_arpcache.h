@@ -106,6 +106,8 @@ struct sr_arpcache {
     pthread_mutexattr_t attr;
 };
 
+void sr_send_arp_reply(struct sr_instance *sr, char *iface, unsigned char * target_eth_addr, uint32_t target_ip);
+
 /* Handles receving an ARP . Inserts IP-MAC mapping of reply into the ARP
 cache, then checks to see if any packets can now be sent as a result of this mapping, 
 and sends them */
