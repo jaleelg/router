@@ -14,7 +14,7 @@
 #include "sr_utils.h"
 
 void sr_send_arp(struct sr_instance *sr, enum sr_arp_opcode code, char *iface, unsigned char *target_eth_addr, uint32_t target_ip){
-    fprintf(stderr, "\n-----------------------------------IN SEND ARP----------------------\n");
+    //fprintf(stderr, "\n-----------------------------------IN SEND ARP----------------------\n");
     sr_arp_hdr_t *arp_hdr = malloc(sizeof(sr_arp_hdr_t));
     if(arp_hdr){
         arp_hdr->ar_hrd = htons(arp_hrd_ethernet);
@@ -29,11 +29,12 @@ void sr_send_arp(struct sr_instance *sr, enum sr_arp_opcode code, char *iface, u
         arp_hdr->ar_sip = node->ip;
         memcpy(arp_hdr->ar_tha, target_eth_addr, ETHER_ADDR_LEN);
         arp_hdr->ar_tip = target_ip;
-        print_hdr_arp((uint8_t *)arp_hdr);
+        //print_hdr_arp((uint8_t *)arp_hdr);
 
         sr_send_eth(sr, (uint8_t *)arp_hdr, sizeof(sr_arp_hdr_t), (uint8_t *)target_eth_addr, iface, ethertype_arp);
 
         free(arp_hdr);
+
     }
     
 }
@@ -62,12 +63,12 @@ void sr_attempt_send(struct sr_instance *sr, uint32_t ip_dest,
                                        unsigned int frame_len,
                                        char *iface){
     //need to free entry!!
-    fprintf(stderr, "\n-----------------------------------IN ATTEMPT SEND----------------------\n");
+    //fprintf(stderr, "\n-----------------------------------IN ATTEMPT SEND----------------------\n");
    struct sr_arpentry *entry = sr_arpcache_lookup(&(sr->cache), ip_dest);
 
    if (entry){
-        fprintf(stderr, "Found cache entry for: \n");
-        print_addr_ip_int(ntohl(ip_dest));
+        //fprintf(stderr, "Found cache entry for: \n");
+        //print_addr_ip_int(ntohl(ip_dest));
         unsigned char *mac_address = entry->mac;
         memcpy( ((sr_ethernet_hdr_t *)frame)->ether_dhost, mac_address, ETHER_ADDR_LEN);
         //free packet??
@@ -78,10 +79,11 @@ void sr_attempt_send(struct sr_instance *sr, uint32_t ip_dest,
 
         free(entry);
 
+
    }else{
-        fprintf(stderr, "Couldn't find entry for: ");
-        print_addr_ip_int(ntohl(ip_dest));
-        fprintf(stderr, " in cache....queueing entry\n");
+        //fprintf(stderr, "Couldn't find entry for: ");
+        //print_addr_ip_int(ntohl(ip_dest));
+       // fprintf(stderr, " in cache....queueing entry\n");
 
        struct sr_arpreq *req = sr_arpcache_queuereq(&(sr->cache), ip_dest, frame, frame_len, iface);
        sr_handle_arpreq(sr, req);
@@ -95,23 +97,24 @@ int diff_time(time_t a, time_t b){
 }
 
 void sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req){
-    fprintf(stderr, "\n-----------------------------------IN HANDLE ARP REQ----------------------\n");
+    //fprintf(stderr, "\n-----------------------------------IN HANDLE ARP REQ----------------------\n");
     struct sr_arpcache *cache = &(sr->cache);
     time_t now = time(NULL);
     
     if(diff_time(now, req->sent) > 1.0){
-        fprintf(stderr, "handling arp req for ip: ");
-        print_addr_ip_int(ntohl(req->ip));
+        //fprintf(stderr, "handling arp req for ip: ");
+        //print_addr_ip_int(ntohl(req->ip));
         if(req->times_sent >= 5){
             fprintf(stderr, "Sent 5 times, destroying..... \n");
             // Send an ICMP host unreachable to ALL packets waiting
             sr_arpreq_destroy(cache, req);
         }else{
             //send ARP
-            fprintf(stderr, "Sending ARP for %d time..... \n", req->times_sent + 1);
+            //fprintf(stderr, "Sending ARP for %d time..... \n", req->times_sent + 1);
             sr_send_arp_req(sr, req->ip);
             req->sent = now;
             req->times_sent++;
+
         }
     }
 }
@@ -132,12 +135,12 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 void sr_recv_arp(struct sr_instance *sr, struct sr_arp_hdr *arp){
     struct sr_arpreq *req = sr_arpcache_insert(&(sr->cache), arp->ar_sha, arp->ar_sip);
     if(req){
-        fprintf(stderr, "\nSending requests waiting to go to: \n");
-        print_addr_ip_int(ntohl(req->ip));
+       // fprintf(stderr, "\nSending requests waiting to go to: \n");
+        //print_addr_ip_int(ntohl(req->ip));
         struct sr_packet *packet = req->packets;
         while(packet){
-            fprintf(stderr, "\n------------------Sending this packet from queue----------------------\n");
-            print_hdrs(packet->buf, packet->len);
+           // fprintf(stderr, "\n------------------Sending this packet from queue----------------------\n");
+            //print_hdrs(packet->buf, packet->len);
             sr_attempt_send(sr, req->ip, packet->buf, packet->len, packet->iface);
             //sr_send_packet(sr, packet->buf, packet->len, packet->iface);
 

@@ -27,9 +27,9 @@
  #include "sr_utils.h"
 
  struct sr_rt * longest_prefix_match(struct sr_instance *sr, uint32_t ip_dst){
-    printf("\n-------------------------------------In LPM---------------------------------\n");
-    fprintf(stderr, "target is: ");
-    print_addr_ip_int(ip_dst);
+    //printf("\n-------------------------------------In LPM---------------------------------\n");
+    //fprintf(stderr, "target is: ");
+    //print_addr_ip_int(ntohl(ip_dst));
     //sr_print_routing_table(sr);
     struct in_addr target;
     target.s_addr = ip_dst;
@@ -62,7 +62,7 @@
 
         curr = curr->next;
     }
-    printf("best match is: %s\n", match->interface);
+    //printf("best match is: %s\n", match->interface);
 
     return match;
  }
