@@ -13,8 +13,9 @@
 
 #include "sr_utils.h"
 
+/* Sends an ARP looking for target IP */
 void sr_send_arp(struct sr_instance *sr, enum sr_arp_opcode code, char *iface, unsigned char *target_eth_addr, uint32_t target_ip){
-    //fprintf(stderr, "\n-----------------------------------IN SEND ARP----------------------\n");
+
     sr_arp_hdr_t *arp_hdr = malloc(sizeof(sr_arp_hdr_t));
     if(arp_hdr){
         arp_hdr->ar_hrd = htons(arp_hrd_ethernet);
@@ -29,7 +30,7 @@ void sr_send_arp(struct sr_instance *sr, enum sr_arp_opcode code, char *iface, u
         arp_hdr->ar_sip = node->ip;
         memcpy(arp_hdr->ar_tha, target_eth_addr, ETHER_ADDR_LEN);
         arp_hdr->ar_tip = target_ip;
-        //print_hdr_arp((uint8_t *)arp_hdr);
+
 
         sr_send_eth(sr, (uint8_t *)arp_hdr, sizeof(sr_arp_hdr_t), (uint8_t *)target_eth_addr, iface, ethertype_arp);
 
@@ -39,15 +40,17 @@ void sr_send_arp(struct sr_instance *sr, enum sr_arp_opcode code, char *iface, u
     
 }
 
+#define BROADCAST 255
+
 void sr_send_arp_req(struct sr_instance *sr, uint32_t target_ip){
     char * iface = sr_get_iface_from_gw_ip(sr, target_ip);
     if(iface){
         uint8_t target[ETHER_ADDR_LEN];
         int i;
         for(i = 0; i < ETHER_ADDR_LEN; i++){
-            target[i] = 255;
+            target[i] = BROADCAST;
         }
-        sr_send_arp(sr, arp_op_request, iface, (unsigned char*)target, target_ip); // not empty string?    
+        sr_send_arp(sr, arp_op_request, iface, (unsigned char*)target, target_ip);    
     }
     
 }
@@ -62,28 +65,23 @@ void sr_attempt_send(struct sr_instance *sr, uint32_t ip_dest,
                                         uint8_t *frame,           
                                        unsigned int frame_len,
                                        char *iface){
-    //need to free entry!!
-    //fprintf(stderr, "\n-----------------------------------IN ATTEMPT SEND----------------------\n");
+
+
    struct sr_arpentry *entry = sr_arpcache_lookup(&(sr->cache), ip_dest);
 
    if (entry){
-        //fprintf(stderr, "Found cache entry for: \n");
-        //print_addr_ip_int(ntohl(ip_dest));
+
         unsigned char *mac_address = entry->mac;
         memcpy( ((sr_ethernet_hdr_t *)frame)->ether_dhost, mac_address, ETHER_ADDR_LEN);
         //free packet??
         sr_send_packet(sr, frame, frame_len, iface);
 
-
-        // Need to build ethernet header
-
         free(entry);
 
 
    }else{
-        //fprintf(stderr, "Couldn't find entry for: ");
-        //print_addr_ip_int(ntohl(ip_dest));
-       // fprintf(stderr, " in cache....queueing entry\n");
+        fprintf(stderr, "Couldn't find entry for: ");
+        print_addr_ip_int(ntohl(ip_dest));
 
        struct sr_arpreq *req = sr_arpcache_queuereq(&(sr->cache), ip_dest, frame, frame_len, iface);
        sr_handle_arpreq(sr, req);
@@ -91,26 +89,39 @@ void sr_attempt_send(struct sr_instance *sr, uint32_t ip_dest,
 }
 
 int diff_time(time_t a, time_t b){
-    //fprintf(stderr, "time a: %d\n", a);
-    //fprintf(stderr, "time b: %d\n", b);
+
     return a-b;
 }
 
+
+/* Sends ICMP messages to all the packets waiting on this request */
+void sr_send_icmp_to_waiting(struct sr_instance *sr, struct sr_arpreq *req){
+    struct sr_packet *packet = req->packets;
+    while(packet){
+        struct sr_if* node = sr_get_interface(sr, packet->iface);
+
+        struct sr_ethernet_hdr *eth = (sr_ethernet_hdr_t *)(packet->buf);
+        struct sr_ip_hdr *ip_hdr = (sr_ip_hdr_t *)(eth + 1);
+        
+        sr_send_icmp3(sr, icmp_unreach, icmp_host_unreach, node->ip, ip_hdr->ip_src, (uint8_t*)ip_hdr, (4*(ip_hdr->ip_hl)) + MORSEL);
+        packet = packet->next;
+    }
+}
+
 void sr_handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req){
-    //fprintf(stderr, "\n-----------------------------------IN HANDLE ARP REQ----------------------\n");
+
     struct sr_arpcache *cache = &(sr->cache);
     time_t now = time(NULL);
     
     if(diff_time(now, req->sent) > 1.0){
-        //fprintf(stderr, "handling arp req for ip: ");
-        //print_addr_ip_int(ntohl(req->ip));
+
         if(req->times_sent >= 5){
             fprintf(stderr, "Sent 5 times, destroying..... \n");
             // Send an ICMP host unreachable to ALL packets waiting
+            sr_send_icmp_to_waiting(sr, req);
             sr_arpreq_destroy(cache, req);
         }else{
             //send ARP
-            //fprintf(stderr, "Sending ARP for %d time..... \n", req->times_sent + 1);
             sr_send_arp_req(sr, req->ip);
             req->sent = now;
             req->times_sent++;
@@ -135,14 +146,12 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 void sr_recv_arp(struct sr_instance *sr, struct sr_arp_hdr *arp){
     struct sr_arpreq *req = sr_arpcache_insert(&(sr->cache), arp->ar_sha, arp->ar_sip);
     if(req){
-       // fprintf(stderr, "\nSending requests waiting to go to: \n");
-        //print_addr_ip_int(ntohl(req->ip));
+
         struct sr_packet *packet = req->packets;
         while(packet){
-           // fprintf(stderr, "\n------------------Sending this packet from queue----------------------\n");
-            //print_hdrs(packet->buf, packet->len);
+
             sr_attempt_send(sr, req->ip, packet->buf, packet->len, packet->iface);
-            //sr_send_packet(sr, packet->buf, packet->len, packet->iface);
+
 
             packet = packet->next;
         }
@@ -163,7 +172,7 @@ struct sr_arpentry *sr_arpcache_lookup(struct sr_arpcache *cache, uint32_t ip) {
     
     int i;
     for (i = 0; i < SR_ARPCACHE_SZ; i++) {
-        //printf("ip is: %u\n", cache->entries[i].ip);
+
         if ((cache->entries[i].valid) && (cache->entries[i].ip == ip)) {
 
             entry = &(cache->entries[i]);
@@ -334,7 +343,6 @@ void sr_print_queue(struct sr_arpcache *cache){
     struct sr_arpreq *request = cache->requests;
     while(request){
         print_addr_ip_int(ntohl(request->ip));
-        fprintf(stderr, "time sent: %d \t num times sent: %u \n", request->sent, request->times_sent);
         struct sr_packet *packet = request->packets;
         while(packet){
             fprintf(stderr, "len: %u \t outgoing interface: %s\n", packet->len, packet->iface);

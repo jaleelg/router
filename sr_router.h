@@ -30,6 +30,8 @@
 #define INIT_TTL 255
 #define PACKET_DUMP_SIZE 1024
 
+#define MORSEL 8
+
 /* forward declare */
 struct sr_if;
 struct sr_rt;
@@ -55,6 +57,10 @@ struct sr_instance
     pthread_attr_t attr;
     FILE* logfile;
 };
+
+void sr_send_icmp3(struct sr_instance *sr, enum sr_icmp_type type, enum sr_icmp_code code, uint32_t ip_source, uint32_t ip_dest, uint8_t *data, unsigned int len);
+
+void sr_send_icmp(struct sr_instance *sr, enum sr_icmp_type type, enum sr_icmp_code code, uint32_t ip_source, uint32_t ip_dest, uint8_t *buf, unsigned int len);
 
 char * sr_get_iface_from_gw_ip(struct sr_instance *sr, uint32_t ip);
 

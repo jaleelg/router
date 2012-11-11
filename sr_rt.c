@@ -27,10 +27,7 @@
  #include "sr_utils.h"
 
  struct sr_rt * longest_prefix_match(struct sr_instance *sr, uint32_t ip_dst){
-    //printf("\n-------------------------------------In LPM---------------------------------\n");
-    //fprintf(stderr, "target is: ");
-    //print_addr_ip_int(ntohl(ip_dst));
-    //sr_print_routing_table(sr);
+
     struct in_addr target;
     target.s_addr = ip_dst;
 
@@ -43,18 +40,13 @@
 
 
     while(curr){
-        //printf("current comparison is: %s\n", inet_ntoa(curr->dest));
-        //printf("u_int current comparison is: %u\n", curr->dest.s_addr);
+
         uint32_t result = curr->mask.s_addr & target.s_addr;
-        //printf("result of mask is: %u\n", result);
+
         if(result == curr->dest.s_addr){
 
-            //printf("found a match: %u\n", result);
-            //printf("current mask is: %s\n", inet_ntoa(curr->mask));
-            //printf("best mask is: %s\n", inet_ntoa(largest_mask));
-
             if(ntohl(curr->mask.s_addr) >= ntohl(largest_mask.s_addr) ){
-                //printf("it is a new longest match!\n");
+
                 largest_mask = curr->mask;
                 match = curr;
             }
@@ -62,7 +54,6 @@
 
         curr = curr->next;
     }
-    //printf("best match is: %s\n", match->interface);
 
     return match;
  }

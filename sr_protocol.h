@@ -161,7 +161,8 @@ enum sr_icmp_type {
 
 enum sr_icmp_code {
   icmp_port_unreach = 3,
-  icmp_host_unreach = 0,
+  icmp_host_unreach = 1,
+  icmp_network_unreach = 0,
   icmp_ttl_code = 0,
   icmp_echo_reply_code = 0,
 };
